@@ -11,11 +11,14 @@ import { nanoid } from "nanoid";
 
 
 // ICONS //   Call them in like this    <FaBeer/>
-import { FaReact,FaBootstrap,FaHouseUser, FaPlus} from "react-icons/fa";
+import { FaPlus, FaReact, FaBootstrap, FaHouseUser } from "react-icons/fa";
 // ICONS //
 
+// COMPONENTS //
+import ToDoItem from "./ToDoItem";
+// COMPONENTS //
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 
 //import './App.css'
@@ -31,17 +34,29 @@ export default function ToDoList(){
 
 
   // Our Array of items that hold our tasks
-  const [tasksList, setTasks] = useState([
-    {id: nanoid(), task: "Learn React", isCompleted: false, icon: <FaReact/>},
-    {id: nanoid(), task: "Remember Bootstrap", isCompleted: false, icon: <FaBootstrap/>},
-    {id: nanoid(), task: "Go Home", isCompleted: false, icon: <FaHouseUser/>},
-  ]);
+  const [tasksList, setTasks] = useState( () => {
+
+    const localValue = localStorage.getItem("TASKS");
+
+    // IF there is no local storage return our default array of tasks
+    if(localValue == null) 
+    return [
+      {id: nanoid(), task: "Learn React" , icon: FaReact, isCompleted: true, editMode: false },
+      {id: nanoid(), task: "Remember Bootstrap", isCompleted: false, editMode: false, icon: FaBootstrap},
+      {id: nanoid(), task: "Go Home", isCompleted: true, editMode: false, icon: FaHouseUser},
+    ];
+
+    // Otherwise return whats in the local data if it exists
+    return JSON.parse(localValue);
+
+  });
 
 
-  // This is for adding and deleting
-  const [newTask, setNewTask] = useState("");
-
-
+  // This allows us to save our items into our local storage thus they wont refresh every time
+  useEffect(() => {
+    // Saves item into local storage
+    localStorage.setItem("TASKS", JSON.stringify(tasksList));
+  }) , [tasksList];  // Any time you use set task or the tasks change your re run this item
 
 
 
@@ -58,9 +73,14 @@ export default function ToDoList(){
   }
 
 
-  function onAddTask(){
+
+    // This is for adding and deleting
+    const [newTask, setNewTask] = useState("");
+
+  function onAddTask(evt){
+    evt.preventDefault(); // this gets rid of the form tag trying to submit the form when adding new task
     const addTask = [...tasksList];
-    addTask.push({id:nanoid(),task: newTask, isCompleted: false});
+    addTask.push({id:nanoid(),task: newTask, isCompleted: false,  editMode: false});
     setTasks(addTask);
     setNewTask("");
   }
@@ -70,41 +90,98 @@ export default function ToDoList(){
     const deleteTask = [...tasksList];
     const index = deleteTask.indexOf(task);
     deleteTask.splice(index,1);
-    setNewTask(deleteTask);
+    setTasks(deleteTask);
   }
 
 
+  // eee USER IS IN EDIT MODE eee //
+
+    // Used for updating
+    const [updateTask, setUpdateTask] = useState("");
+
+  // Turns on edit mode
   function onEditTask(task){
     const editTask = [...tasksList];
     const index = editTask.indexOf(task);
-    editTask[index].task = prompt("Edit Task", task.task)
+    editTask[index].editMode = true;
+    //editTask[index].task = prompt("Edit Task", task.task);
+    setUpdateTask(task.task); // shows the name in the textbox before change
+    setTasks(editTask);
   }
 
 
+  function onSaveTask(task){
+    const saveTask = [...tasksList];
+    const index = saveTask.indexOf(task);
+    saveTask[index].task = updateTask;
+    saveTask[index].editMode = false;
+    setTasks(saveTask);
+  }
 
+
+  const onCancelClick = (task) => {
+    const cancelTask = [...tasksList];
+    const index = cancelTask.indexOf(task);
+    cancelTask[index].editMode = false;
+    setTasks(cancelTask);
+  }
+
+  // eee USER IS IN EDIT MODE eee //
+
+
+
+  // dddd DROP DOWN MENU dddd //
+
+  const [filteredTasks, setFilteredTasks] = useState(tasksList); // array of our filtered tasks
+
+  const [filter, setFilter] = useState("allTasks"); // allTasks, completed, incomplete
+
+  const onSelectChange = (evt) => {
+    // Set the filter to the value of what the user chose
+    setFilter(evt.target.value);
+    setFilteredTasks(tasksList.filter((task) => {
+
+      if(evt.target.value === "allTasks") return true;
+      if(evt.target.value === "completed") return task.isCompleted;
+      if(evt.target.value === "incomplete") return !task.isCompleted;
+
+    }));
+  }
+  // dddd DROP DOWN MENU dddd //
 
 
 
   return(
     <>
-      <h1 >Todo List</h1>
+
+    <header className="d-flex">
+        <h1 >Todo List {filter}</h1>
+
+        <select defaultValue="allTasks" className="form-select" aria-label="Default select example" onChange={(evt) => onSelectChange(evt)}>
+          <option  value="allTasks">Show All Tasks</option>
+          <option value="completed">Show Completed Tasks</option>
+          <option value="incomplete">Show Incomplete Tasks</option>
+        </select>
+      </header> 
+
 
       <form>
 
         <ul className="">
           {/* For every Task we have in the array do these */}
-          {tasksList.map((task)=>(
-            <li key={task.id} className="list-group-item   mt-2">       
-                                                    {/* This calls in if the check box should be true or false based on array*/}
-              <input type="checkbox" className="form-check-input" checked={task.isCompleted}          onChange={(userChecked) => onCheckBoxChange(userChecked,task)} />
-              
-              {/* calls in the name of the task Below */}
-              <label className="form-check-label">{task.task} {task.icon}</label>
-
-              <button className="btn btn-danger ms-5" onClick={() => onDeleteTask(task)}>Delete Task</button>
-
-              <button className="btn btn-info ms-1" onClick={() => onEditTask(task)}>Edit Task</button>
-            </li>
+          {filteredTasks.map((task)=>(
+            <ToDoItem  
+              // THESE ITEMS ARE BEING PASSED INTO THE ToDoItem.jsx file
+              task={task}  
+              key={task.id}  
+              updateTask={updateTask}
+              setUpdateTask={(updateTask) => setUpdateTask(updateTask)}
+              onCheckBoxChange = {(userChecked) => onCheckBoxChange(userChecked, task)}
+              onDeleteTask = {() => onDeleteTask(task)}
+              onEditTask = {() => onEditTask(task)}
+              onSaveTask = {() => onSaveTask(task)}
+              onCancelClick = {() => onCancelClick(task)}
+            />
           ))}
         </ul>
 
@@ -113,7 +190,7 @@ export default function ToDoList(){
         {/* Adding a New Task */}
         <div className="d-flex">
           <input className="form-control  mb-5" placeholder="Add a New Task" type="text" value={newTask} onChange={(taskNameAdded) => setNewTask(taskNameAdded.target.value)}/>
-          <button className="btn btn-primary  mb-5"  onClick={{onAddTask}}><FaPlus/></button>
+          <button className="btn btn-primary  mb-5"  onClick={(evt) => onAddTask(evt)}><FaPlus/></button>
         </div>
 
 
